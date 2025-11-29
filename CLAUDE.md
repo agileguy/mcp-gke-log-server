@@ -35,7 +35,10 @@ ruff check gke_logs_mcp/
 mypy gke_logs_mcp/
 
 # Run tests
-pytest tests/
+pytest
+
+# Run tests with coverage
+pytest --cov=gke_logs_mcp --cov=healthcheck --cov-report=term-missing
 ```
 
 ## Architecture
@@ -58,6 +61,8 @@ pytest tests/
 | `DEFAULT_MAX_ENTRIES` | 500 | Max log entries per query |
 | `DEFAULT_HOURS_BACK` | 1 | Default time window in hours |
 | `LOG_LEVEL` | INFO | Python logging level |
+| `TIMEOUT_SECONDS` | 60 | Request timeout in seconds |
+| `CACHE_TTL_SECONDS` | 300 | Cache TTL for cluster/namespace listings |
 
 ## GCP Setup
 
