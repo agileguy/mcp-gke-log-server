@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gke-logs-mcp"
+version = "1.0.0"
+description = "MCP server for querying GKE logs via Cloud Logging"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Your Name", email = "you@example.com" }
+]
+keywords = ["mcp", "gke", "kubernetes", "logging", "gcp", "claude"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "google-cloud-logging>=3.10.0",
+    "google-auth>=2.29.0",
+    "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn>=0.29.0",
+    "starlette>=0.37.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+[project.scripts]
+gke-logs-mcp = "gke_logs_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/gke-logs-mcp"
+Documentation = "https://github.com/yourusername/gke-logs-mcp#readme"
+Repository = "https://github.com/yourusername/gke-logs-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gke_logs_mcp"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

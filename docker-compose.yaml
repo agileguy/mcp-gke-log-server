@@ -1,0 +1,47 @@
+# Docker Compose for local development
+# Mount your GCP credentials for authentication
+
+version: "3.8"
+
+services:
+  gke-logs-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+      - DEFAULT_MAX_ENTRIES=500
+      - DEFAULT_HOURS_BACK=1
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount your service account key for local dev
+      # In production, use Workload Identity instead
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-~/.config/gcloud/application_default_credentials.json}:/secrets/gcp-key.json:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Development container with live reload
+  gke-logs-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./gke_logs_mcp:/app/gke_logs_mcp:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-~/.config/gcloud/application_default_credentials.json}:/secrets/gcp-key.json:ro
+    working_dir: /app
+    command: python -m gke_logs_mcp.server
+    profiles:
+      - dev

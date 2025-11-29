@@ -1,0 +1,15 @@
+# GKE Logs MCP Server Dependencies
+
+# MCP SDK
+mcp>=1.0.0
+
+# Google Cloud
+google-cloud-logging>=3.10.0
+google-auth>=2.29.0
+
+# Data validation
+pydantic>=2.7.0
+
+# HTTP server (for health checks in production)
+uvicorn>=0.29.0
+starlette>=0.37.0

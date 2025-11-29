@@ -1,0 +1,166 @@
+# GKE Logs MCP Server - Kubernetes Deployment
+# Uses Workload Identity for secure GCP authentication
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-servers
+  labels:
+    app.kubernetes.io/name: mcp-servers
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gke-logs-mcp
+  namespace: mcp-servers
+  annotations:
+    # Workload Identity binding - replace with your values
+    iam.gke.io/gcp-service-account: gke-logs-mcp@YOUR_PROJECT_ID.iam.gserviceaccount.com
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gke-logs-mcp-config
+  namespace: mcp-servers
+data:
+  # Configuration via environment variables
+  GCP_PROJECT_ID: "YOUR_PROJECT_ID"
+  DEFAULT_MAX_ENTRIES: "500"
+  DEFAULT_HOURS_BACK: "1"
+  LOG_LEVEL: "INFO"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gke-logs-mcp
+  namespace: mcp-servers
+  labels:
+    app: gke-logs-mcp
+    app.kubernetes.io/name: gke-logs-mcp
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gke-logs-mcp
+  template:
+    metadata:
+      labels:
+        app: gke-logs-mcp
+      annotations:
+        # Prometheus metrics (if you have it)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/health"
+    spec:
+      serviceAccountName: gke-logs-mcp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: gke-logs-mcp
+          image: gcr.io/YOUR_PROJECT_ID/gke-logs-mcp:latest
+          # For production with health checks, run the healthcheck server
+          command: ["python", "healthcheck.py"]
+          ports:
+            - containerPort: 8080
+              name: health
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: gke-logs-mcp-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - gke-logs-mcp
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gke-logs-mcp
+  namespace: mcp-servers
+spec:
+  selector:
+    app: gke-logs-mcp
+  ports:
+    - port: 8080
+      targetPort: health
+      protocol: TCP
+      name: health
+  type: ClusterIP
+---
+# Network Policy - restrict ingress to health checks only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gke-logs-mcp-policy
+  namespace: mcp-servers
+spec:
+  podSelector:
+    matchLabels:
+      app: gke-logs-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow Google APIs (Cloud Logging)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
