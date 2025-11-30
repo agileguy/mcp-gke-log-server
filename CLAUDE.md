@@ -45,7 +45,10 @@ pytest --cov=gke_logs_mcp --cov=healthcheck --cov-report=term-missing
 
 **Single-file MCP server**: All server logic is in `gke_logs_mcp/server.py`:
 - `GKELogsConfig`: Pydantic model for configuration from environment variables
-- `GKELogsClient`: Wrapper around `google-cloud-logging` that builds filter queries and formats log entries
+- `GKELogsClient`: Wrapper around `google-cloud-logging` and `google-cloud-container` APIs
+  - Uses GKE Container API (`container_v1.ClusterManagerClient`) for accurate cluster listing
+  - Uses Cloud Logging API for log queries and namespace discovery
+  - Includes retry logic with exponential backoff for transient failures
 - MCP tool handlers registered via `@app.list_tools()` and `@app.call_tool()` decorators
 - Server runs on stdio transport using `mcp.server.stdio.stdio_server`
 
@@ -66,4 +69,8 @@ pytest --cov=gke_logs_mcp --cov=healthcheck --cov-report=term-missing
 
 ## GCP Setup
 
-Run `scripts/setup-gcp.sh` with `GCP_PROJECT_ID` set. It creates a service account with `roles/logging.viewer` and optionally configures Workload Identity if `GKE_CLUSTER_NAME` is provided.
+Run `scripts/setup-gcp.sh` with `GCP_PROJECT_ID` set. It creates a service account with the following roles:
+- `roles/logging.viewer` - read logs from Cloud Logging
+- `roles/container.clusterViewer` - list GKE clusters via the Container API
+
+Optionally configures Workload Identity if `GKE_CLUSTER_NAME` is provided.

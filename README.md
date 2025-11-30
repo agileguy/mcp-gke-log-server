@@ -6,19 +6,21 @@ A production-ready Model Context Protocol (MCP) server that exposes Google Kuber
 
 - **Query GKE logs** by cluster, namespace, pod, container
 - **Flexible filtering** by severity level, time range, and search text
-- **List discovery** for clusters and namespaces
+- **Accurate cluster discovery** using the GKE Container API (not log sampling)
+- **Namespace discovery** from Cloud Logging with caching
 - **Production-ready** with health checks, security hardening, and Kubernetes manifests
 - **Workload Identity** support for secure GCP authentication
 - **Built-in caching** for cluster and namespace listings with configurable TTL
 - **Timeout handling** with configurable request timeouts
+- **Retry logic** with exponential backoff for transient API failures
 - **Input validation** to prevent filter injection attacks
 
 ## Tools Exposed
 
 | Tool | Description |
 |------|-------------|
-| `list_gke_clusters` | Discover available GKE clusters with logs |
-| `list_gke_namespaces` | List namespaces within a cluster |
+| `list_gke_clusters` | List all GKE clusters in the project (via GKE Container API) |
+| `list_gke_namespaces` | List namespaces within a cluster that have logs |
 | `get_gke_logs` | Query logs with filters (namespace, pod, severity, text search) |
 
 ## Quick Start
@@ -210,7 +212,7 @@ Once connected to Claude:
 ### Server Components
 
 - **`GKELogsConfig`**: Pydantic model for configuration with validation
-- **`GKELogsClient`**: Wrapper around Cloud Logging API with caching and timeout handling
+- **`GKELogsClient`**: Wrapper around Cloud Logging and GKE Container APIs with caching and timeout handling
 - **`create_server()`**: Factory function for dependency injection and testability
 - **MCP Tool Handlers**: Registered via decorators for `list_tools` and `call_tool`
 
@@ -221,12 +223,15 @@ Once connected to Claude:
 - **Caching**: TTL-based caching for cluster and namespace listings
 - **Streaming**: Memory-efficient iteration over log entries
 - **Timeouts**: Configurable timeouts with `asyncio.wait_for`
-- **Retry**: Built-in retry for transient API failures
+- **Retry**: Exponential backoff retry for transient `ServiceUnavailable` errors
+- **GKE Container API**: Accurate cluster listing via `container_v1.ClusterManagerClient`
 
 ## Security
 
 - Uses Workload Identity for GCP authentication (no keys in production)
-- Requires only `roles/logging.viewer` (read-only)
+- Minimal IAM permissions (read-only):
+  - `roles/logging.viewer` - read logs from Cloud Logging
+  - `roles/container.clusterViewer` - list GKE clusters
 - Runs as non-root user
 - Includes Network Policies for egress/ingress control
 - Input validation prevents filter injection attacks
