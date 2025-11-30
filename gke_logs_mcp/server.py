@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Iterator
 
 from google.cloud import logging as cloud_logging
+from google.cloud import container_v1
 from google.cloud.logging_v2 import DESCENDING
 from google.cloud.logging_v2.entries import LogEntry
 from google.api_core import exceptions as google_exceptions
@@ -142,6 +143,7 @@ class GKELogsClient:
     def __init__(self, config: GKELogsConfig):
         self.config = config
         self._client: cloud_logging.Client | None = None
+        self._container_client: container_v1.ClusterManagerClient | None = None
         self._cache_ttl = config.cache_ttl_seconds
         self._clusters_cache: tuple[float, list[str]] | None = None
         self._namespaces_cache: dict[str, tuple[float, list[str]]] = {}
@@ -152,6 +154,13 @@ class GKELogsClient:
             self._client = cloud_logging.Client(project=self.config.project_id)
             logger.info(f"Initialized Cloud Logging client for project: {self._client.project}")
         return self._client
+
+    @property
+    def container_client(self) -> container_v1.ClusterManagerClient:
+        if self._container_client is None:
+            self._container_client = container_v1.ClusterManagerClient()
+            logger.info("Initialized GKE Cluster Manager client")
+        return self._container_client
 
     def _is_cache_valid(self, cache_time: float) -> bool:
         """Check if a cached value is still valid."""
@@ -240,9 +249,10 @@ class GKELogsClient:
         Iterate over log entries with retry support.
 
         Uses streaming to avoid loading all entries into memory at once.
+        Retries on transient ServiceUnavailable errors with exponential backoff.
         """
         retry = Retry(
-            predicate=google_exceptions.ServiceUnavailable,
+            predicate=lambda exc: isinstance(exc, google_exceptions.ServiceUnavailable),
             initial=1.0,
             maximum=10.0,
             multiplier=2.0,
@@ -253,14 +263,10 @@ class GKELogsClient:
             filter_=filter_str,
             order_by=order_by,
             max_results=max_results,
+            retry=retry,
         )
 
-        count = 0
-        for entry in entries_iter:
-            if count >= max_results:
-                break
-            yield entry
-            count += 1
+        yield from entries_iter
 
     async def get_logs(
         self,
@@ -333,7 +339,11 @@ class GKELogsClient:
         }
 
     async def list_clusters(self) -> list[str]:
-        """List available GKE clusters that have logs."""
+        """List available GKE clusters using the GKE Container API.
+
+        Uses the Container API to get an accurate list of all clusters
+        in the project, rather than inferring from log entries.
+        """
         # Check cache first
         if self._clusters_cache is not None:
             cache_time, cached_clusters = self._clusters_cache
@@ -341,17 +351,16 @@ class GKELogsClient:
                 logger.debug("Returning cached clusters list")
                 return cached_clusters
 
-        filter_str = 'resource.type="k8s_container"'
+        # Get project ID from logging client (handles auto-detection)
+        project_id = self.client.project
 
         loop = asyncio.get_running_loop()
 
         def fetch_clusters() -> list[str]:
-            clusters: set[str] = set()
-            for entry in self._iter_entries(filter_str, max_results=1000):
-                cluster = entry.resource.labels.get("cluster_name")
-                if cluster:
-                    clusters.add(cluster)
-            return sorted(clusters)
+            # Use "-" as location to list clusters across all zones/regions
+            parent = f"projects/{project_id}/locations/-"
+            response = self.container_client.list_clusters(parent=parent)
+            return sorted(cluster.name for cluster in response.clusters)
 
         try:
             result = await asyncio.wait_for(

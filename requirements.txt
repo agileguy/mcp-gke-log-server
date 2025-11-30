@@ -5,6 +5,7 @@ mcp>=1.0.0
 
 # Google Cloud
 google-cloud-logging>=3.10.0
+google-cloud-container>=2.45.0
 google-auth>=2.29.0
 
 # Data validation

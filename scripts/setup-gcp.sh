@@ -49,11 +49,17 @@ else
         --project="$PROJECT_ID"
 fi
 
-# 3. Grant logging viewer role
+# 3. Grant required roles
 print_step "Granting logging.viewer role..."
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/logging.viewer" \
+    --condition=None
+
+print_step "Granting container.clusterViewer role..."
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="roles/container.clusterViewer" \
     --condition=None
 
 # 4. Set up Workload Identity (if cluster name provided)
@@ -85,7 +91,9 @@ echo ""
 print_step "Setup complete! Summary:"
 echo "  Project ID: $PROJECT_ID"
 echo "  Service Account: ${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-echo "  Role: roles/logging.viewer"
+echo "  Roles:"
+echo "    - roles/logging.viewer (read logs)"
+echo "    - roles/container.clusterViewer (list clusters)"
 if [[ -n "$CLUSTER_NAME" ]]; then
     echo "  Workload Identity: ${K8S_NAMESPACE}/${K8S_SA_NAME}"
 fi

@@ -87,6 +87,20 @@ def mock_cloud_logging_client(mocker, mock_log_entries):
         "gke_logs_mcp.server.cloud_logging.Client",
         return_value=mock_client
     )
+
+    # Also mock the container client for cluster listing
+    mock_container_client = MagicMock()
+    mock_cluster = MagicMock()
+    mock_cluster.name = "test-cluster"
+    mock_response = MagicMock()
+    mock_response.clusters = [mock_cluster]
+    mock_container_client.list_clusters.return_value = mock_response
+
+    mocker.patch(
+        "gke_logs_mcp.server.container_v1.ClusterManagerClient",
+        return_value=mock_container_client
+    )
+
     return mock_client
 
 

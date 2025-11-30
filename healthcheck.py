@@ -14,6 +14,7 @@ import subprocess
 import sys
 
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 import uvicorn
@@ -25,31 +26,31 @@ logger = logging.getLogger("healthcheck")
 mcp_process: subprocess.Popen | None = None
 
 
-async def health(request):
+async def health(request: Request) -> JSONResponse:
     """Liveness probe - is the container running?"""
     return JSONResponse({"status": "healthy"})
 
 
-async def ready(request):
+async def ready(request: Request) -> JSONResponse:
     """Readiness probe - is the MCP server ready to accept connections?"""
     global mcp_process
-    
+
     if mcp_process is None:
         return JSONResponse({"status": "not_started"}, status_code=503)
-    
+
     if mcp_process.poll() is not None:
         return JSONResponse(
             {"status": "crashed", "returncode": mcp_process.returncode},
             status_code=503
         )
-    
+
     return JSONResponse({"status": "ready"})
 
 
-async def startup():
+async def startup() -> None:
     """Start the MCP server as a subprocess."""
     global mcp_process
-    
+
     logger.info("Starting MCP server subprocess...")
     mcp_process = subprocess.Popen(
         [sys.executable, "-m", "gke_logs_mcp.server"],
@@ -60,10 +61,10 @@ async def startup():
     logger.info(f"MCP server started with PID {mcp_process.pid}")
 
 
-async def shutdown():
+async def shutdown() -> None:
     """Gracefully shutdown the MCP server."""
     global mcp_process
-    
+
     if mcp_process:
         logger.info("Shutting down MCP server...")
         mcp_process.terminate()
@@ -88,10 +89,10 @@ app = Starlette(
 )
 
 
-def main():
+def main() -> None:
     port = int(os.getenv("HEALTH_PORT", "8080"))
     logger.info(f"Starting health check server on port {port}")
-    
+
     uvicorn.run(
         app,
         host="0.0.0.0",

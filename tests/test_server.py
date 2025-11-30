@@ -393,18 +393,18 @@ class TestGKELogsClientAsync:
         assert logs_client._clusters_cache is not None
 
     @pytest.mark.asyncio
-    async def test_list_clusters_uses_cache(self, logs_client, mock_cloud_logging_client):
+    async def test_list_clusters_uses_cache(self, logs_client, mock_cloud_logging_client, mocker):
         """List clusters should use cache on subsequent calls."""
         # First call
         await logs_client.list_clusters()
 
-        # Clear the mock call count
-        mock_cloud_logging_client.list_entries.reset_mock()
+        # Clear the mock call count on the container client
+        logs_client._container_client.list_clusters.reset_mock()
 
         # Second call should use cache
         await logs_client.list_clusters()
 
-        mock_cloud_logging_client.list_entries.assert_not_called()
+        logs_client._container_client.list_clusters.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_list_namespaces(self, logs_client, mock_cloud_logging_client):
